@@ -1,7 +1,12 @@
 # Shu'a' — Backend API
 
 Express + MongoDB service: accepts chest X-ray uploads, forwards them to
-the inference service, stores every result, and serves the history.
+the inference service, stores each result, and serves per-session history.
+
+History is scoped to an anonymous per-browser session id sent as the
+`X-Session-Id` header (an opaque token, `[A-Za-z0-9_-]{8,64}`). There are
+no user accounts; the header is required on all `/api` routes so results
+are never shared across visitors.
 
 ## Run locally
 
@@ -17,15 +22,19 @@ Requires MongoDB running and the inference service up at
 
 ## Endpoints
 
+All `/api` routes require the `X-Session-Id` header (`400` if missing or
+malformed).
+
 - `POST /api/diagnose` — multipart field `image` (JPEG/PNG, max 10MB).
   Returns the full saved record:
   `{id, imageFilename, label, labelAr, confidence, probabilities, modelVersion, createdAt, updatedAt}`.
-  Errors: `400` bad/missing file, `413` too large, `429` rate-limited,
-  `502` inference service down, `500` unexpected — always with a JSON `error` message.
-- `GET /api/diagnoses?page=1&limit=10` — history, most recent first
-  (limit capped at 50).
-- `DELETE /api/diagnoses` — clears all history (backs the frontend's
-  "Clear history" button; global because the demo has no user accounts).
+  Errors: `400` bad/missing file or session, `413` too large, `429`
+  rate-limited, `502` inference service down, `500` unexpected — always
+  with a JSON `error` message.
+- `GET /api/diagnoses?page=1&limit=10` — this session's history, most
+  recent first (limit capped at 50).
+- `DELETE /api/diagnoses` — clears this session's history (backs the
+  frontend's "Clear history" button).
 - `GET /health` — liveness.
 
 ## Environment variables (all required before public deployment)

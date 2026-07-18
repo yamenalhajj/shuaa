@@ -40,6 +40,23 @@ function sanitizeFilename(name) {
   return clean || 'upload';
 }
 
+// Client-supplied session token (X-Session-Id) used only as an exact-match
+// filter, so constrain it to an opaque token shape and reject anything else.
+function getSessionId(req) {
+  const raw = req.get('X-Session-Id');
+  if (typeof raw === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(raw)) return raw;
+  return null;
+}
+
+function requireSession(req, res, next) {
+  const sessionId = getSessionId(req);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing or invalid X-Session-Id header' });
+  }
+  req.sessionId = sessionId;
+  next();
+}
+
 // Explicit field list so a future schema change can't silently leak or
 // drop fields — everything saved to Mongo is returned to the caller.
 function serialize(doc) {
@@ -59,7 +76,7 @@ function serialize(doc) {
   };
 }
 
-router.post('/diagnose', diagnoseLimiter, upload.single('image'), async (req, res, next) => {
+router.post('/diagnose', diagnoseLimiter, requireSession, upload.single('image'), async (req, res, next) => {
   try {
     if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
       return res.status(400).json({ error: 'Missing image — send a JPEG/PNG as multipart field "image"' });
@@ -71,6 +88,7 @@ router.post('/diagnose', diagnoseLimiter, upload.single('image'), async (req, re
     const result = await classifyImage(req.file.buffer, req.file.mimetype);
 
     const doc = await Diagnosis.create({
+      sessionId: req.sessionId,
       imageFilename: sanitizeFilename(req.file.originalname),
       ...result,
     });
@@ -81,17 +99,19 @@ router.post('/diagnose', diagnoseLimiter, upload.single('image'), async (req, re
   }
 });
 
-router.get('/diagnoses', async (req, res, next) => {
+router.get('/diagnoses', requireSession, async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
 
+    // Scoped to this browser's session only.
+    const filter = { sessionId: req.sessionId };
     const [items, total] = await Promise.all([
-      Diagnosis.find()
+      Diagnosis.find(filter)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
-      Diagnosis.countDocuments(),
+      Diagnosis.countDocuments(filter),
     ]);
 
     res.json({
@@ -106,11 +126,10 @@ router.get('/diagnoses', async (req, res, next) => {
   }
 });
 
-// Supports the frontend's "Clear history" action. Demo tool with no user
-// accounts, so clearing is global by design.
-router.delete('/diagnoses', async (req, res, next) => {
+// Clears only the calling browser's own history — never anyone else's.
+router.delete('/diagnoses', requireSession, async (req, res, next) => {
   try {
-    const { deletedCount } = await Diagnosis.deleteMany({});
+    const { deletedCount } = await Diagnosis.deleteMany({ sessionId: req.sessionId });
     res.json({ deleted: deletedCount });
   } catch (err) {
     next(err);

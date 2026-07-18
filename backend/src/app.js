@@ -6,10 +6,8 @@ const diagnosesRouter = require('./routes/diagnoses');
 const errorHandler = require('./middleware/errorHandler');
 const { connectDb } = require('./db');
 
-// Ensures a MongoDB connection before a request that needs it proceeds.
-// On a serverless platform, instances are reused across requests, so this
-// only pays the real connect cost once per warm instance — every request
-// after that just awaits the already-resolved cached promise.
+// Ensure a MongoDB connection before handling a DB-backed request. connectDb
+// caches its promise, so this only pays the connect cost once per instance.
 async function ensureDb(req, res, next) {
   try {
     await connectDb();

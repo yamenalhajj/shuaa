@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 
 const diagnosisSchema = new mongoose.Schema(
   {
+    // Anonymous per-browser id; history is scoped to it so results don't
+    // leak across visitors. Indexed since every list query filters on it.
+    sessionId: { type: String, required: true, index: true },
     imageFilename: { type: String, required: true },
     label: { type: String, required: true, enum: ['NORMAL', 'PNEUMONIA'] },
     labelAr: { type: String, required: true },

@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 
-// Cached across warm serverless invocations (and a no-op after the first
-// connect locally) — a request never pays the connect cost more than once
-// per process.
+// Memoized so the connection is established once per process and reused.
 let connectPromise = null;
 
 function connectDb() {

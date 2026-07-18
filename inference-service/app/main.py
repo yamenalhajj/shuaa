@@ -23,11 +23,9 @@ limiter = Limiter(key_func=get_remote_address)
 def _ensure_model_file(model_path: str) -> None:
     """Fetch the checkpoint from MODEL_URL if it isn't already on disk.
 
-    Used on serverless deployments (Vercel) where the 512MB checkpoint
-    can't be bundled with the code — it's fetched once from Vercel Blob
-    storage into a writable path and reused for the life of the warm
-    instance. No-op for local/Render, where MODEL_PATH already points at
-    a real file and MODEL_URL is unset.
+    Lets the 512MB checkpoint live in object storage rather than in the
+    deployment bundle: on a fresh instance it's downloaded once to a
+    writable path. No-op locally, where MODEL_PATH points at a real file.
     """
     if not model_path or os.path.isfile(model_path):
         return
@@ -49,18 +47,14 @@ def _load_model_state(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load the model at startup, but NEVER re-raise here: raising inside
-    # lifespan tears down the ASGI app before it binds to a port, so the
-    # platform shows a dead-container error instead of a running service.
-    # On failure we leave app.state.model = None and let get_model()'s lazy
-    # path retry on the first real request. The service still fails loudly —
-    # /predict returns 503 and /health reports degraded — it just does so
-    # per-request instead of by refusing to boot. There is still no silent
-    # heuristic fallback: a request is never answered without a real model.
+    # Never re-raise here: raising inside lifespan tears the app down before
+    # it binds a port, so the platform shows a dead container instead of a
+    # running service. On failure, get_model() retries lazily per request and
+    # still fails loudly (503 on /predict) — never a silent fallback result.
     try:
         _load_model_state(app)
     except ModelLoadError:
-        logger.exception("Model failed to load at startup — will retry lazily on first request")
+        logger.exception("Model failed to load at startup — will retry on first request")
         app.state.model = None
     yield
 
