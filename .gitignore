@@ -23,3 +23,6 @@ Thumbs.db
 
 # Build artifacts (deployment zips)
 *-deploy.zip
+
+# Frontend static-deploy build copy (regenerated from dist)
+frontend/deploy-static/dist/
