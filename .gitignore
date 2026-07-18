@@ -20,3 +20,6 @@ vgg16.pth.zip
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Build artifacts (deployment zips)
+*-deploy.zip
