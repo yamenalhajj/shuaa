@@ -1,5 +1,6 @@
 import logging
 import os
+import urllib.request
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -19,16 +20,43 @@ RATE_LIMIT = os.environ.get("PREDICT_RATE_LIMIT", "30/minute")
 limiter = Limiter(key_func=get_remote_address)
 
 
+def _ensure_model_file(model_path: str) -> None:
+    """Fetch the checkpoint from MODEL_URL if it isn't already on disk.
+
+    Used on serverless deployments (Vercel) where the 512MB checkpoint
+    can't be bundled with the code — it's fetched once from Vercel Blob
+    storage into a writable path and reused for the life of the warm
+    instance. No-op for local/Render, where MODEL_PATH already points at
+    a real file and MODEL_URL is unset.
+    """
+    if not model_path or os.path.isfile(model_path):
+        return
+    model_url = os.environ.get("MODEL_URL")
+    if not model_url:
+        return  # load_model() will raise its own clear "not found" error
+    logger.info("Fetching model checkpoint from MODEL_URL ...")
+    os.makedirs(os.path.dirname(model_path) or ".", exist_ok=True)
+    urllib.request.urlretrieve(model_url, model_path)
+    logger.info("Model checkpoint fetched to %s", model_path)
+
+
+def _load_model_state(app: FastAPI) -> None:
+    model_path = os.environ.get("MODEL_PATH", "")
+    _ensure_model_file(model_path)
+    app.state.model = load_model(model_path)
+    logger.info("Model loaded from %s", model_path)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Fail loudly at startup: a broken model must never serve traffic.
-    model_path = os.environ.get("MODEL_PATH", "")
+    # (On serverless ASGI runtimes, lifespan events firing reliably isn't
+    # guaranteed — get_model()'s lazy path below is the fallback for that.)
     try:
-        app.state.model = load_model(model_path)
+        _load_model_state(app)
     except ModelLoadError:
         logger.exception("Model failed to load — service cannot start")
         raise
-    logger.info("Model loaded from %s", model_path)
     yield
 
 
@@ -37,9 +65,22 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+def get_model(request: Request):
+    """Return the loaded model, loading it lazily if startup didn't."""
+    model = getattr(request.app.state, "model", None)
+    if model is not None:
+        return model
+    _load_model_state(request.app)
+    return request.app.state.model
+
+
 @app.get("/health")
 def health(request: Request):
-    loaded = getattr(request.app.state, "model", None) is not None
+    try:
+        get_model(request)
+        loaded = True
+    except Exception:
+        loaded = False
     return {"status": "ok" if loaded else "degraded", "model_loaded": loaded}
 
 
@@ -62,7 +103,13 @@ async def predict_route(request: Request, file: UploadFile = File(...)):
         )
 
     try:
-        return predict(request.app.state.model, data)
+        model = get_model(request)
+    except ModelLoadError as exc:
+        logger.exception("Model unavailable")
+        raise HTTPException(status_code=503, detail=f"Model unavailable: {exc}") from None
+
+    try:
+        return predict(model, data)
     except Exception:
         logger.exception("Inference failed")
         raise HTTPException(status_code=500, detail="Inference failed") from None

@@ -1,13 +1,12 @@
 require('dotenv').config();
 
-const mongoose = require('mongoose');
 const createApp = require('./app');
+const { connectDb } = require('./db');
 
 const PORT = Number(process.env.PORT) || 4000;
-const MONGO_URI = process.env.MONGO_URI;
 
 async function main() {
-  if (!MONGO_URI) {
+  if (!process.env.MONGO_URI) {
     console.error('MONGO_URI env var is required (see .env.example)');
     process.exit(1);
   }
@@ -16,7 +15,9 @@ async function main() {
     process.exit(1);
   }
 
-  await mongoose.connect(MONGO_URI);
+  // Fail fast locally if Mongo isn't reachable, rather than waiting for
+  // the first request to discover it.
+  await connectDb();
   const app = createApp();
   app.listen(PORT, () => console.log(`Shu'a' backend listening on :${PORT}`));
 }
