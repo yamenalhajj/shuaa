@@ -21,11 +21,20 @@ export default function Header({ t, lang, view, historyCount, onHome, onHistory,
         borderBottom: '1px solid rgba(140,190,210,0.12)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, cursor: 'pointer' }} onClick={onHome}>
-        <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 0.5, color: '#f2f7f8' }}>شعاع</span>
-        <span className="mono" style={{ fontSize: 10.5, letterSpacing: 2.5, color: '#7e939e', textTransform: 'uppercase' }}>
-          Shu'a' · CXR
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} onClick={onHome}>
+        <img
+          src="/logo-icon.png"
+          alt="Shu'a' logo"
+          width="40"
+          height="40"
+          style={{ display: 'block', flex: 'none' }}
+        />
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 0.5, color: '#f2f7f8' }}>شعاع</span>
+          <span className="mono" style={{ fontSize: 10.5, letterSpacing: 2.5, color: '#7e939e', textTransform: 'uppercase' }}>
+            Shu'a' · CXR
+          </span>
+        </div>
       </div>
       <div style={{ height: 18, width: 2, background: 'linear-gradient(oklch(0.8 0.09 200),transparent)' }} />
       <span style={{ fontSize: 12.5, color: '#7e939e' }}>{t.brandSub}</span>

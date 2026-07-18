@@ -64,6 +64,7 @@ export const STR = {
   demoService: { ar: 'عطل الخدمة', en: 'Service down' },
   demoType: { ar: 'نوع غير مدعوم', en: 'Bad file type' },
   demoSize: { ar: 'ملف كبير', en: 'File too large' },
+  createdBy: { ar: 'إعداد', en: 'Created by' },
 };
 
 export const PHASES = [
