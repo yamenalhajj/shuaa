@@ -49,14 +49,19 @@ def _load_model_state(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Fail loudly at startup: a broken model must never serve traffic.
-    # (On serverless ASGI runtimes, lifespan events firing reliably isn't
-    # guaranteed — get_model()'s lazy path below is the fallback for that.)
+    # Load the model at startup, but NEVER re-raise here: raising inside
+    # lifespan tears down the ASGI app before it binds to a port, so the
+    # platform shows a dead-container error instead of a running service.
+    # On failure we leave app.state.model = None and let get_model()'s lazy
+    # path retry on the first real request. The service still fails loudly —
+    # /predict returns 503 and /health reports degraded — it just does so
+    # per-request instead of by refusing to boot. There is still no silent
+    # heuristic fallback: a request is never answered without a real model.
     try:
         _load_model_state(app)
     except ModelLoadError:
-        logger.exception("Model failed to load — service cannot start")
-        raise
+        logger.exception("Model failed to load at startup — will retry lazily on first request")
+        app.state.model = None
     yield
 
 
