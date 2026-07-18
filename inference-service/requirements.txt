@@ -3,5 +3,10 @@ uvicorn==0.34.3
 python-multipart==0.0.20
 slowapi==0.1.9
 pillow==11.2.1
-torch==2.7.1
-torchvision==0.22.1
+
+# CPU-only builds — the default PyPI wheels bundle full CUDA/GPU runtime
+# libraries (several GB), which blows past Vercel's 500MB function bundle
+# limit and serves no purpose on a CPU-only serverless function anyway.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: shuaa-inference
+    runtime: python
+    rootDir: inference-service
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MODEL_PATH
+        value: /tmp/vgg16.pth
+      - key: MODEL_URL
+        value: https://vccxlg6tsqialygn.public.blob.vercel-storage.com/vgg16.pth
+      - key: PNEUMONIA_THRESHOLD
+        value: "0.65"
+      - key: MODEL_VERSION
+        value: vgg16-chestxray-v1
+      - key: PREDICT_RATE_LIMIT
+        value: 30/minute
